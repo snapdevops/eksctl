@@ -39,6 +39,12 @@ AWS Access Key ID [****************JFDE]:
 AWS Secret Access Key [****************XDER]: 
 Default region name [us-eas-1]: 
 Default output format [json]: 
+#aws sts get-caller-identity
+{
+    "Account": "****************", 
+    "UserId": "**************", 
+    "Arn": "arn:aws:iam::********:user/*****"
+}
 
 create EKS - AWS Cluster 
 eksctl create cluster
