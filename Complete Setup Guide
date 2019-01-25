@@ -355,3 +355,11 @@ kubernetes-minion-group-de5q   Ready                      36m
 
 kubernetes-minion-group-yhdx   Ready                      36m
 
+###### Auto Cluster of EC2 instances creation from kubernetes cluster with horizontal cluster.
+
+
+1. Provide additional policy of IAM to change the auto scaling group of AWS
+2. Run the deployment in k8s of edit the yaml file with autoscalegroup id.
+
+
+
