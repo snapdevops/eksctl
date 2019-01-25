@@ -56,7 +56,302 @@ Note: eksctl create clsuter - it creates cluster with default parameters
 final to test..run kubectl cluster-info
 
 
+
+FROM SCRIPT
+Helm now has an installer script that will automatically grab the latest version of the Helm client and install it locally.
+
+You can fetch that script, and then execute it locally. It’s well documented so that you can read through it and understand what it is doing before you run it.
+
+$ curl https://raw.githubusercontent.com/helm/helm/master/scripts/get > get_helm.sh
+$ sudo sh get_helm.sh
+
+helm version
+Client: &version.Version{SemVer:"v2.12.3", GitCommit:"eecf22f77df5f65c823aacd2dbd30ae6c65f186e", GitTreeState:"clean"}
+
+
+## For tiller setup
+cat <<EOF | kubectl apply -f -
+> kind: ClusterRoleBinding
+> apiVersion: rbac.authorization.k8s.io/v1beta1
+> metadata:
+>   name: tiller-role-binding
+> roleRef:
+>   kind: ClusterRole
+>   name: cluster-admin
+>   apiGroup: rbac.authorization.k8s.io
+> subjects:
+> - kind: ServiceAccount
+>   name: tiller
+>   namespace: kube-system
+> ---
+> apiVersion: v1
+> kind: ServiceAccount
+> metadata:
+>   name: tiller
+>   namespace: kube-system
+> EOF
+clusterrolebinding.rbac.authorization.k8s.io "tiller-role-binding" created
+serviceaccount "tiller" created
+
+# helm init --service-account tiller
+Creating /home/cloud_user/.helm 
+Creating /home/cloud_user/.helm/repository 
+Creating /home/cloud_user/.helm/repository/cache 
+Creating /home/cloud_user/.helm/repository/local 
+Creating /home/cloud_user/.helm/plugins 
+Creating /home/cloud_user/.helm/starters 
+Creating /home/cloud_user/.helm/cache/archive 
+Creating /home/cloud_user/.helm/repository/repositories.yaml 
+Adding stable repo with URL: https://kubernetes-charts.storage.googleapis.com 
+Adding local repo with URL: http://127.0.0.1:8879/charts 
+$HELM_HOME has been configured at /home/cloud_user/.helm.
+Tiller (the Helm server-side component) has been installed into your Kubernetes Cluster.
+
+
+#helm install stable/metrics-server --name metrics-server --version 2.0.4 --namespace metrics
+NAME:   metrics-server
+LAST DEPLOYED: Fri Jan 25 12:23:31 2019
+NAMESPACE: metrics
+STATUS: DEPLOYED
+RESOURCES:
+==> v1beta1/APIService
+NAME                    AGE
+v1beta1.metrics.k8s.io  0s
+==> v1/Pod(related)
+NAME                             READY  STATUS             RESTARTS  AGE
+metrics-server-5f64dbfb9d-49qvd  0/1    ContainerCreating  0         0s
+==> v1/ServiceAccount
+NAME            SECRETS  AGE
+metrics-server  1        0s
+==> v1/ClusterRole
+NAME                   AGE
+system:metrics-server  0s
+==> v1/ClusterRoleBinding
+NAME                                  AGE
+metrics-server:system:auth-delegator  0s
+system:metrics-server                 0s
+==> v1beta1/RoleBinding
+NAME                        AGE
+metrics-server-auth-reader  0s
+==> v1/Service
+NAME            TYPE       CLUSTER-IP    EXTERNAL-IP  PORT(S)  AGE
+metrics-server  ClusterIP  10.100.77.71  <none>       443/TCP  0s
+==> v1beta2/Deployment
+NAME            DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
+metrics-server  1        1        1           0          0s
+NOTES:
+The metric server has been deployed. 
+In a few minutes you should be able to list metrics using the following
+command:
+  kubectl get --raw "/apis/metrics.k8s.io/v1beta1/nodes"
   
+  #kubectl get services metrics-server -n metrics -o yaml
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: 2019-01-25T12:23:31Z
+  labels:
+    app: metrics-server
+    chart: metrics-server-2.0.4
+    heritage: Tiller
+    release: metrics-server
+  name: metrics-server
+  namespace: metrics
+  resourceVersion: "4606"
+  selfLink: /api/v1/namespaces/metrics/services/metrics-server
+  uid: 06d44f1b-209c-11e9-a92f-02ac655ca5b4
+spec:
+  clusterIP: 10.100.77.71
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+  selector:
+    app: metrics-server
+    release: metrics-server
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+ # kubectl run nginx-test --image=nginx:latest --requests=cpu=200m --expose --port=80
+service "nginx-test" created
+deployment.apps "nginx-test" created
+
+# Now take session to -php server to try to push the load for increasing CPU for auto horizontal spin up
+############## Horizontal Auto Scaling ###############
+
+Run & Expose PHP-Apache Server
+To demonstrate autoscaling we will use a custom docker image based on php-apache server. The image can be found here. It defines index.php page which performs some CPU intensive computations.
+
+First, we’ll start a deployment running the image and expose it as a service:
+
+$ kubectl run php-apache \   
+
+  --image=gcr.io/google\_containers/hpa-example \
+
+  --requests=cpu=500m,memory=500M --expose --port=80  
+
+service "php-apache" createddeployment "php-apache" created
+Now, we will wait some time and verify that both the deployment and the service were correctly created and are running:
+
+$ kubectl get deployment
+
+NAME         DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+
+php-apache   1         1         1            1           49s
 
 
+
+$ kubectl get pods  
+NAME                          READY     STATUS    RESTARTS   AGE
+
+php-apache-2046965998-z65jn   1/1       Running   0          30s
+We may now check that php-apache server works correctly by calling wget with the service’s address:
+
+$ kubectl run -i --tty service-test --image=busybox /bin/sh  
+Hit enter for command prompt  
+$ wget -q -O- http://php-apache.default.svc.cluster.local
+
+OK!
+Starting Horizontal Pod Autoscaler
+Now that the deployment is running, we will create a Horizontal Pod Autoscaler for it. To create it, we will use kubectl autoscale command, which looks like this:
+
+$ kubectl autoscale deployment php-apache --cpu-percent=50 --min=1 --max=10
+This defines a Horizontal Ppod Autoscaler that maintains between 1 and 10 replicas of the Pods controlled by the php-apache deployment we created in the first step of these instructions. Roughly speaking, the horizontal autoscaler will increase and decrease the number of replicas (via the deployment) so as to maintain an average CPU utilization across all Pods of 50% (since each pod requests 500 milli-cores by kubectl run, this means average CPU usage of 250 milli-cores). See here for more details on the algorithm.
+
+We may check the current status of autoscaler by running:
+
+$ kubectl get hpa
+
+NAME         REFERENCE                     TARGET    CURRENT   MINPODS   MAXPODS   AGE
+
+php-apache   Deployment/php-apache/scale   50%       0%        1         20        14s
+Please note that the current CPU consumption is 0% as we are not sending any requests to the server (the CURRENT column shows the average across all the pods controlled by the corresponding replication controller).
+
+Raising the Load
+Now, we will see how our autoscalers (Cluster Autoscaler and Horizontal Pod Autoscaler) react on the increased load of the server. We will start two infinite loops of queries to our server (please run them in different terminals):
+
+$ kubectl run -i --tty load-generator --image=busybox /bin/sh  
+Hit enter for command prompt  
+$ while true; do wget -q -O- http://php-apache.default.svc.cluster.local; done
+We need to wait a moment (about one minute) for stats to propagate. Afterwards, we will examine status of Horizontal Pod Autoscaler:
+
+$ kubectl get hpa
+
+NAME         REFERENCE                     TARGET    CURRENT   MINPODS   MAXPODS   AGE
+
+php-apache   Deployment/php-apache/scale   50%       310%      1         20        2m
+
+
+
+$ kubectl get deployment php-apache
+
+NAME              DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+
+php-apache        7         7         7            3           4m
+Horizontal Pod Autoscaler has increased the number of pods in our deployment to 7. Let’s now check, if all the pods are running:
+
+jsz@jsz-desk2:~/k8s-src$ kubectl get pods
+
+php-apache-2046965998-3ewo6        0/1       Pending   0          1m
+
+php-apache-2046965998-8m03k        1/1       Running   0          1m
+
+php-apache-2046965998-ddpgp        1/1       Running   0          5m
+
+php-apache-2046965998-lrik6        1/1       Running   0          1m
+
+php-apache-2046965998-nj465        0/1       Pending   0          1m
+
+php-apache-2046965998-tmwg1        1/1       Running   0          1m
+
+php-apache-2046965998-xkbw1        0/1       Pending   0          1m
+As we can see, some pods are pending. Let’s describe one of pending pods to get the reason of the pending state:
+
+$ kubectl describe pod php-apache-2046965998-3ewo6
+
+Name: php-apache-2046965998-3ewo6
+
+Namespace: default
+
+...
+
+Events:
+
+  FirstSeen From SubobjectPath Type Reason Message
+
+
+
+  1m {default-scheduler } Warning FailedScheduling pod (php-apache-2046965998-3ewo6) failed to fit in any node
+
+fit failure on node (kubernetes-minion-group-yhdx): Insufficient CPU
+
+fit failure on node (kubernetes-minion-group-de5q): Insufficient CPU
+
+
+
+  1m {cluster-autoscaler } Normal TriggeredScaleUp pod triggered scale-up, mig: kubernetes-minion-group, sizes (current/new): 2/3
+The pod is pending as there was no CPU in the system for it. We see there’s a TriggeredScaleUp event connected with the pod. It means that the pod triggered reaction of Cluster Autoscaler and a new node will be added to the cluster. Now we’ll wait for the reaction (about 3 minutes) and list all nodes:
+
+$ kubectl get nodes
+
+NAME                           STATUS                     AGE
+
+kubernetes-master              Ready,SchedulingDisabled   9m
+
+kubernetes-minion-group-6z5i   Ready                      43s
+
+kubernetes-minion-group-de5q   Ready                      9m
+
+kubernetes-minion-group-yhdx   Ready                      9m
+As we see a new node kubernetes-minion-group-6z5i was added by Cluster Autoscaler. Let’s verify that all pods are now running:
+
+$ kubectl get pods
+
+NAME                               READY     STATUS    RESTARTS   AGE
+
+php-apache-2046965998-3ewo6        1/1       Running   0          3m
+
+php-apache-2046965998-8m03k        1/1       Running   0          3m
+
+php-apache-2046965998-ddpgp        1/1       Running   0          7m
+
+php-apache-2046965998-lrik6        1/1       Running   0          3m
+
+php-apache-2046965998-nj465        1/1       Running   0          3m
+
+php-apache-2046965998-tmwg1        1/1       Running   0          3m
+
+php-apache-2046965998-xkbw1        1/1       Running   0          3m
+After the node addition all php-apache pods are running!
+
+Stop Load
+We will finish our example by stopping the user load. We’ll terminate both infinite while loops sending requests to the server and verify the result state:
+
+$ kubectl get hpa
+
+NAME         REFERENCE                     TARGET    CURRENT   MINPODS   MAXPODS   AGE
+
+php-apache   Deployment/php-apache/scale   50%       0%        1         10        16m
+
+
+
+$ kubectl get deployment php-apache
+
+NAME              DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+
+php-apache        1         1         1            1           14m
+As we see, in the presented case CPU utilization dropped to 0, and the number of replicas dropped to 1.
+
+After deleting pods most of the cluster resources are unused. Scaling the cluster down may take more time than scaling up because Cluster Autoscaler makes sure that the node is really not needed so that short periods of inactivity (due to pod upgrade etc) won’t trigger node deletion (see cluster autoscaler doc). After approximately 10-12 minutes you can verify that the number of nodes in the cluster dropped:
+
+$ kubectl get nodes
+
+NAME                           STATUS                     AGE
+
+kubernetes-master              Ready,SchedulingDisabled   37m
+
+kubernetes-minion-group-de5q   Ready                      36m
+
+kubernetes-minion-group-yhdx   Ready                      36m
 
