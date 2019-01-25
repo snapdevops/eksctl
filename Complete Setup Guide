@@ -35,8 +35,8 @@ Usage:
 # aws configure
 
 aws configure
-AWS Access Key ID [****************JFDE]: 
-AWS Secret Access Key [****************XDER]: 
+AWS Access Key ID [****************CCCC]: 
+AWS Secret Access Key [****************XDSS]: 
 Default region name [us-eas-1]: 
 Default output format [json]: 
 #aws sts get-caller-identity
