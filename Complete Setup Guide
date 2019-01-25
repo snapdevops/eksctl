@@ -1,0 +1,56 @@
+
+
+# Install the eksctl to create a AWS EKS with easy way instead of using cloudformation template for VPC creation.
+curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" /
+| tar xz -C /usr/local/bin/
+
+## Install Kubectl
+curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+
+
+## Install aws-iam-authenticator
+curl https://amazon-eks.s3-us-west-2.amazonaws.com/1.11.5/2018-12-06/bin/linux/amd64/aws-iam-authenticator -o aws-iam-authenticato
+r 
+
+chmod +x kubectl aws-iam-authenticator
+sudo mv kubectl aws-iam-authenticator /usr/local/bin/
+
+Check version to verify the installation
+---------------------------
+kubectl version
+Client Version: version.Info{Major:"1", Minor:"13", GitVersion:"v1.13.2", GitCommit:"cff46ab41ff0bb44d8584413b598ad8360ec1def", GitTreeState:"clean", BuildDate:"20
+19-01-10T23:35:51Z", GoVersion:"go1.11.4", Compiler:"gc", Platform:"linux/amd64"}
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+eksctl version
+[ℹ]  version.Info{BuiltAt:"", GitCommit:"", GitTag:"0.1.19"}
+
+
+aws-iam-authenticator help
+A tool to authenticate to Kubernetes using AWS IAM credentials
+Usage:
+  aws-iam-authenticator [command]
+--------------------------------  
+
+# aws configure
+
+aws configure
+AWS Access Key ID [****************JFDE]: 
+AWS Secret Access Key [****************XDER]: 
+Default region name [us-eas-1]: 
+Default output format [json]: 
+
+create EKS - AWS Cluster 
+eksctl create cluster
+
+eksctl create cluster --name=devcluster --nodes-min=1 --nodes-max=5 --node-type=t2.medium  --set-kubeconfig-context=false --region=us-east-1 --zones=us-east-1a,us-east-1b,us-east-1d 
+
+Note: eksctl create clsuter - it creates cluster with default parameters
+
+final to test..run kubectl cluster-info
+
+
+  
+
+
+
